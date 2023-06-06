@@ -1,0 +1,57 @@
+import cv2
+import numpy as np
+import socket
+from datetime import datetime
+sw=False
+
+def relay():
+    host = "192.168.1.100"
+    port = 6722
+    soc= socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    soc.connect((host,port))
+    with  soc:
+            soc.send(b"11")
+            soc.send(b"00")
+            ans=str(soc.recv(1024))
+            if ans!=str(b'10000000'):
+               raise SystemError('Relay check') 
+  
+    soc.close()
+cap = cv2.VideoCapture(0)
+if (cap.isOpened() == False): 
+  print("Unable to read camera feed")
+cap.set(3,24800)
+cap.set(4,24800) 
+frame_width = int(cap.get(3))
+frame_height = int(cap.get(4))
+tnow= str(datetime.now().strftime('%d%m') +'_'+datetime.now().strftime('%H%M%S%f')+'.avi')
+out = cv2.VideoWriter(tnow,cv2.VideoWriter_fourcc('D','I','V','X'), 30, (frame_width,frame_height))
+while(True):
+  ret, frame = cap.read()
+  if ret == True:  
+    sgray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    #gray=cv2.bitwise_not(gray)
+    gray = sgray[20:300, 30:550]
+    ret, thresh = cv2.threshold(gray, 50, 255, cv2.THRESH_BINARY_INV)
+    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    img_contours = np.uint8(np.zeros((gray.shape[0],gray.shape[1])))
+    cv2.drawContours(img_contours, contours, -1, (255,255,255), 5)
+    cv2.imshow("Pole",img_contours)
+    cv2.imshow("Original",frame)
+    cv2.drawContours(frame, contours, -1, (0,0,255), 5)
+    cv2.imshow("Original",frame)
+    for i in (contours):
+      if  1000>cv2.contourArea(i)>10:
+        sw=True 
+        out.write(frame)
+        if sw==True:
+         relay()    
+        break
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+      break
+  else:
+      break 
+cap.release()
+out.release()
+
+cv2.destroyAllWindows()
